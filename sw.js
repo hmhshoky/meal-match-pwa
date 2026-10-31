@@ -1,5 +1,5 @@
 /* The cache name is generated from the release contents. */
-const VERSION = 'v2-380efc1e5947e9d2';
+const VERSION = 'v2-d795a7c83ba076fb';
 const BASE = new URL(self.registration.scope);
 const PREFIX = 'meal-match-pwa:' + encodeURIComponent(BASE.pathname) + ':';
 const CACHE = PREFIX + VERSION;

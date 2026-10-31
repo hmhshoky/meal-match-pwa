@@ -66,6 +66,30 @@ Jede Zutat kann einer Gruppe angehören. Gruppen gelten für alle Rezepte.
 Gruppen werden als optionales Feld ingredientGroups in der JSON gespeichert.
 Bisherige Dateien bleiben ladbar und starten ohne definierte Gruppen.
 
+## Bedienung auf Handy und PC
+
+Die Dateileiste zeigt den Dateinamen, den Änderungsstatus und **Speichern**.
+Im Menü mit den drei Punkten findest du **JSON laden**, **JSON herunterladen**
+sowie Installation und App-Updates. Suche und Filter bleiben beim Scrollen
+erreichbar; das Fragezeichen erklärt die Bedienung.
+
+Die Rezeptkarte öffnet das Rezept über ihre gesamte Fläche. **Einplanen** bleibt
+eine getrennte Aktion. Auf dem Handy nutzen Details den sichtbaren Bildschirm
+mit festem Kopf- und Aktionsbereich. Am PC stehen Zutaten und Zusatzangaben
+nebeneinander. Beim Wechsel zwischen Rezept und Zutat führt **Zurück zu …**
+zum vorherigen Fenster; Suche, Filter und Scrollposition bleiben erhalten.
+Nicht übernommene Formulareingaben werden vor dem Verwerfen abgefragt.
+
+Austauschbare Zutaten haben eine eigene Gruppenübersicht. Im Gruppeneditor
+stehen ausgewählte Zutaten oben und die weiteren Suchtreffer darunter.
+In der Einkaufsliste lässt sich die ganze Zutatenzeile abhaken.
+Erledigte Einträge stehen gesammelt unten. Auf dem Handy bleibt die Aktion
+zum Übernehmen in den Vorrat oberhalb der Navigation erreichbar.
+
+Die Browserprüfung verwendet ausschließlich synthetische Testdaten.
+Die Fenster wurden bei Handy- und Desktop-Abmessungen überprüft; das ersetzt
+keinen Test der iOS-Systemleisten auf dem tatsächlichen iPhone.
+
 ## Funktionstests
 
 Im Projektordner: node tests/interaction.test.cjs.

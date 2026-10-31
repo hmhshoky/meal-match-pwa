@@ -10,7 +10,7 @@ function app(){
     if(!nodes.has(id))nodes.set(id,{id,innerHTML:'',textContent:'',value:'',hidden:false,disabled:false,dataset:{},open:false,scrollTop:0,classList:{add(){},remove(){},toggle(){}},focus(){},close(){this.open=false},showModal(){this.open=true},contains(){return false},addEventListener(){},querySelector(){return null}});
     return nodes.get(id);
   };
-  const ctx=vm.createContext({URL,Blob,TextEncoder,console,setTimeout(){return 0},clearTimeout(){},CSS:{escape:s=>s},location:{hash:''},window:{addEventListener(){},scrollTo(){},confirm(){return true}},document:{activeElement:null,getElementById:node,querySelector:node,querySelectorAll(){return[]},addEventListener(type,fn){events[type]=fn}}});
+  const ctx=vm.createContext({URL,Blob,TextEncoder,console,setTimeout(){return 0},clearTimeout(){},CSS:{escape:s=>s},location:{hash:''},window:{addEventListener(){},scrollTo(){},confirm(){return true}},document:{activeElement:null,getElementById:node,querySelector:node,querySelectorAll(){return[]},addEventListener(type,fn){const previous=events[type];events[type]=event=>{if(previous)previous(event);fn(event)}}}});
   vm.runInContext(source,ctx);
   const run=s=>vm.runInContext(s,ctx);
   const click=(action,id,extra={})=>events.click({target:{closest(){return{dataset:{action,id,...extra},disabled:false}}}});
@@ -28,7 +28,7 @@ test('Syntax, empty start and existing JSON import',()=>{
  a.load(fixture);assert.equal(a.state().recipes.length,fixture.recipes.length);
 });
 test('No duplicate recipe-open button or numeric percentage; bar and title remain',()=>{
- const a=app();a.load(fixture);const markup=a.run('renderMeals()');assert(!markup.includes('Rezept öffnen'));assert(!/\d+ %</.test(markup));assert(markup.includes('class="meter"'));assert(markup.includes('class="title-button"'));
+ const a=app();a.load(fixture);const markup=a.run('renderMeals()');assert(!markup.includes('Rezept öffnen'));assert(!/\d+ %</.test(markup));assert(markup.includes('class="meter"'));assert(markup.includes('class="title-button card-open"'));
 });
 test('Pantry has search/new button, no inline form, checkboxes, trash or arrow',()=>{
  const a=app();a.load(fixture);a.click('tab',undefined,{tab:'vorrat'});const markup=a.node('app').innerHTML;
@@ -112,7 +112,7 @@ test('Buying a checked alternative preserves which cheese was actually bought',(
  const a=app();a.load({...groupedFixture,pantry:['rice','lime'],checked:['gouda']});assert(a.run('shoppingIsChecked(getShopping()[0])'));a.click('buy-checked');assert(a.state().pantry.includes('gouda'));assert(!a.state().pantry.includes('mozz'));assert.equal(a.run('getShopping().length'),0);a.click('undo');assert(!a.state().pantry.includes('gouda'));assert(a.state().checked.includes('gouda'));
 });
 test('Group editor validates membership, saves, round-trips and undo removes group',()=>{
- const a=app();a.load({...groupedFixture,ingredientGroups:[]});a.click('open-groups');a.node('group-name').value='Zitrus';a.click('toggle-group-member','lemon');a.submit('group-form');assert(a.node('group-error').textContent.includes('mindestens zwei'));a.click('toggle-group-member','lime');a.submit('group-form');assert.equal(a.state().ingredientGroups.length,1);assert.equal(a.node('modal').open,false);
+ const a=app();a.load({...groupedFixture,ingredientGroups:[]});a.click('open-groups');a.click('new-group');a.node('group-name').value='Zitrus';a.click('toggle-group-member','lemon');a.submit('group-form');assert(a.node('group-error').textContent.includes('mindestens zwei'));a.click('toggle-group-member','lime');a.submit('group-form');assert.equal(a.state().ingredientGroups.length,1);assert.equal(a.node('modal').dataset.kind,'group-list');
  const serialized=a.run('window.MealMatchFiles.exportText()');const b=app();b.load(JSON.parse(serialized));assert.equal(b.state().ingredientGroups[0].name,'Zitrus');assert.equal(b.run('getMatch(recipe("a")).status'),'ready');a.click('undo');assert.equal(a.state().ingredientGroups.length,0);
 });
 test('Invalid/overlapping group imports leave the currently loaded state intact',()=>{
@@ -120,6 +120,60 @@ test('Invalid/overlapping group imports leave the currently loaded state intact'
  const bad={...groupedFixture,ingredientGroups:[{id:'x',name:'Bad',ingredientIds:['missing','rice']}]};try{a.load(bad)}catch{rejected=true}assert(rejected);assert.deepEqual(a.state(),before);
  rejected=false;try{a.load({...groupedFixture,ingredientGroups:[...groupedFixture.ingredientGroups,{id:'overlap',name:'Bad',ingredientIds:['rice','lime']}]})}catch{rejected=true}assert(rejected);assert.deepEqual(a.state(),before);
 });
+
+test('Compact file menu keeps save visible and secondary actions in its disclosure',()=>{
+ const start=html.indexOf('<div class="file-actions">'),end=html.indexOf('<div id="file-error"',start),bar=html.slice(start,end);
+ assert(bar.indexOf('data-action="save-file"')<bar.indexOf('<details class="file-menu"'));
+ assert(bar.indexOf('data-action="load-file"')>bar.indexOf('<details class="file-menu"'));
+ assert(html.includes('class="list-tools"'));assert(html.includes('.card-open::after'));
+});
+test('Cross-links and back restore queries, filters, dialog and list scroll position',()=>{
+ const a=app();a.load(fixture);a.run('window.scrollY=420;window.scrollTo=options=>{window.scrollY=options.top};ui.query="bowl";ui.filter="near";ui.pantryQuery="reis";ui.availableOnly=true;renderApp()');
+ a.click('detail','bowl');a.click('ingredient-detail','rice');assert.equal(a.run('ui.pantryQuery'),'reis');assert.equal(a.run('ui.availableOnly'),true);
+ a.click('ingredient-recipe','rice-pot');assert.equal(a.run('ui.dialogTrail.length'),2);assert(a.node('modal').innerHTML.includes('Zurück zu Reis'));
+ a.click('dialog-back');assert.equal(a.node('modal').dataset.kind,'ingredient');assert.equal(a.run('ui.ingredientId'),'rice');
+ a.click('dialog-back');assert.equal(a.node('modal').dataset.kind,'detail');assert.equal(a.run('ui.detailId'),'bowl');assert.equal(a.run('ui.query'),'bowl');assert.equal(a.run('ui.filter'),'near');
+ a.click('close-modal');assert.equal(a.run('window.scrollY'),420);assert.equal(a.run('isDirty()'),false);
+});
+test('Fixed dialog actions retain native submit-form association',()=>{
+ const a=app();let associated=null,moved=false;
+ const form={id:'sample-form',querySelectorAll(){return[]}};
+ const button={setAttribute(name,value){associated={name,value}}};
+ const footer={closest(){return form},querySelectorAll(){return[button]}};
+ a.node('modal').querySelector=selector=>selector==='.modal-footer'?footer:selector==='form'?form:null;
+ a.node('modal').append=value=>{moved=value===footer};
+ a.run('showModal(modalHeader("Formular")+"<div class=\\"modal-body\\"></div>","test")');
+ assert(moved);assert.deepEqual(associated,{name:'form',value:'sample-form'});
+});
+test('In-app discard confirmation retains edits on keep and leaves only on discard',()=>{
+ const a=app();const field={id:'test-name',type:'text',value:'Vorher',checked:false,dataset:{}};
+ const form={querySelectorAll(){return[field]}};
+ let prompt='';
+ a.node('modal').querySelector=selector=>selector==='form'?form:null;
+ a.node('modal').insertAdjacentHTML=(where,markup)=>{prompt=markup};
+ a.run('showModal(modalHeader("Bearbeiten")+"<div class=\\"modal-body\\"></div>","test")');
+ field.value='Nachher';a.click('close-modal');assert(a.node('modal').open);assert(prompt.includes('Weiter bearbeiten'));assert(prompt.includes('Verwerfen'));
+ a.click('keep-dialog');assert(a.node('modal').open);assert.equal(field.value,'Nachher');
+ a.click('close-modal');a.click('discard-dialog');assert.equal(a.node('modal').open,false);
+});
+test('Group overview is separate; selected ingredients precede candidate search',()=>{
+ const a=app();a.load(groupedFixture);a.click('open-groups');assert.equal(a.node('modal').dataset.kind,'group-list');assert(!a.node('modal').innerHTML.includes('id="group-form"'));
+ a.click('edit-group','cheese');assert.equal(a.node('modal').dataset.kind,'groups');
+ const markup=a.node('modal').innerHTML;assert(markup.indexOf('id="group-selected"')<markup.indexOf('id="group-search"'));assert(a.run('renderSelectedGroupMembers()').includes('Gouda'));assert(!a.run('renderGroupChoices()').includes('data-id="gouda"'));assert.equal(a.run('isDirty()'),false);
+});
+test('Shopping separates completed items below pending items and offers a mobile stock action',()=>{
+ const a=app();a.load(fixture);const markup=a.run('renderShopping()'),done=markup.indexOf('class="shopping-completed"');
+ assert(done>0);assert(markup.indexOf('data-shopping-row="chicken"')<done);assert(markup.indexOf('data-shopping-row="pepper"')>done);
+ assert(markup.includes('class="shopping-purchase"'));assert(markup.includes('class="shopping-dock"'));assert(markup.includes('aria-label="Paprika gekauft"'));
+ a.events.change({target:{dataset:{shopping:'chicken'},checked:true}});assert(a.state().checked.includes('chicken'));a.click('undo');assert(!a.state().checked.includes('chicken'));
+});
+test('Visual viewport height and offset are exposed for mobile dialog positioning',()=>{
+ const a=app(),values={};
+ a.run('window.visualViewport={height:390,offsetTop:35}');
+ a.node('modal');a.run('document.documentElement={style:{setProperty(key,value){this[key]=value}}};updateVisualViewport()');
+ assert.equal(a.run('document.documentElement.style["--viewport-height"]'),'390px');assert.equal(a.run('document.documentElement.style["--viewport-top"]'),'35px');
+});
+
 (async()=>{
  const a=app();a.load({...groupedFixture,pantry:['rice','lime']});
  const result=await a.run('calculateBestValue(state.recipes,state.pantry,1)');assert.equal(result.ids.length,1);assert.equal(result.count,2);assert(['mozz','gouda'].includes(result.ids[0]));assert.deepEqual([...result.unlocked].sort(),['b','c']);console.log('PASS Best Value: one cheese unlocks both recipes, optional ingredients do not affect cooking.');
